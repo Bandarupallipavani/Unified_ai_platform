@@ -44,3 +44,7 @@ logs/
 # SQLite (dev only)
 *.db
 *.sqlite
+
+# Runtime output
+*.out
+*.err
