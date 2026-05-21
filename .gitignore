@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+*.egg
+
+# Environment
+.env
+*.env.local
+
+# Data & models (large files - store in cloud storage)
+data_sessions/
+reports/
+outputs/
+*.pkl
+*.pt
+*.onnx
+
+# Node
+node_modules/
+frontend/build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Docker volumes
+postgres_data/
+mlflow_artifacts/
+
+# Logs
+*.log
+logs/
+
+# SQLite (dev only)
+*.db
+*.sqlite
