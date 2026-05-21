@@ -10,13 +10,74 @@ import {
 import { DEPLOY_TARGETS } from "../constants/models";
 
 const LAST_MODEL_KEY = "unifiedai:lastModelId";
+const LAST_RENDER_CONFIG_KEY = "unifiedai:lastRenderDeployConfig";
+
+const DEFAULT_FIELD_VALUES = {
+  render_free: {
+    branch: "main",
+    frontend_service_type: "static",
+    frontend_root_dir: "frontend",
+    frontend_build_command: "npm ci && npm run build",
+    frontend_publish_path: "build",
+    frontend_rewrite_rule: "/* -> /index.html",
+    backend_root_dir: "backend",
+    backend_start_command: "python -m uvicorn main:app --host 0.0.0.0 --port $PORT",
+  },
+};
+
+function getDefaultFieldValues(targetId) {
+  return { ...(DEFAULT_FIELD_VALUES[targetId] || {}) };
+}
+
+function slugify(value, fallback = "unified-ai") {
+  const raw = (value || "").trim().toLowerCase();
+  const slug = raw
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return slug || fallback;
+}
+
+function getRepoNameFromUrl(repoUrl) {
+  const trimmed = (repoUrl || "").trim();
+  if (!trimmed) return "";
+
+  const sshMatch = trimmed.match(/:([^/]+\/[^/]+?)(?:\.git)?$/);
+  if (sshMatch?.[1]) {
+    return sshMatch[1].split("/").pop() || "";
+  }
+
+  const httpsMatch = trimmed.match(/\/([^/]+?)(?:\.git)?$/);
+  return httpsMatch?.[1] || "";
+}
+
+function getDerivedRenderNames(repoUrl) {
+  const repoName = getRepoNameFromUrl(repoUrl);
+  const base = slugify(repoName || "unified-ai", "unified-ai");
+  return {
+    frontend_service_name: `${base}-web`,
+    backend_service_name: `${base}-api`,
+  };
+}
+
+function readSavedRenderConfig() {
+  try {
+    const raw = localStorage.getItem(LAST_RENDER_CONFIG_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "object" && parsed ? parsed : {};
+  } catch {
+    return {};
+  }
+}
 
 const TARGET_CONFIGS = {
   render_free: {
     title: "Render full-stack public links",
     description: "Generate a free Render blueprint for both the frontend app and backend API so users can open public onrender.com URLs right away.",
     steps: [
-      "Enter the public Git repo URL and the service names you want to use on Render.",
+      "Enter the public Git repo URL and service names you want to use on Render.",
+      "Confirm the frontend service type is Static Site and verify build/publish/rewrite settings.",
       "Generate the render.yaml blueprint and optionally open the Deploy to Render link.",
       "Approve both free services and share the frontend URL as the public app link.",
     ],
@@ -25,6 +86,21 @@ const TARGET_CONFIGS = {
       { key: "branch", label: "Branch", placeholder: "main" },
       { key: "frontend_service_name", label: "Frontend service name", placeholder: "uap-web-demo" },
       { key: "backend_service_name", label: "Backend service name", placeholder: "uap-api-demo" },
+      {
+        key: "frontend_service_type",
+        label: "Frontend service type",
+        type: "select",
+        options: [
+          { value: "static", label: "Static Site (Recommended)" },
+          { value: "web", label: "Web Service (Advanced)" },
+        ],
+      },
+      { key: "frontend_root_dir", label: "Frontend root directory", placeholder: "frontend" },
+      { key: "frontend_build_command", label: "Frontend build command", placeholder: "npm ci && npm run build" },
+      { key: "frontend_publish_path", label: "Frontend publish directory", placeholder: "build" },
+      { key: "frontend_rewrite_rule", label: "Frontend rewrite rule", placeholder: "/* -> /index.html" },
+      { key: "backend_root_dir", label: "Backend root directory", placeholder: "backend" },
+      { key: "backend_start_command", label: "Backend start command", placeholder: "python -m uvicorn main:app --host 0.0.0.0 --port $PORT" },
     ],
   },
   rest: {
@@ -156,7 +232,10 @@ export default function DeployPage() {
   const navigate = useNavigate();
 
   const [target, setTarget] = useState("render_free");
-  const [fieldValues, setFieldValues] = useState({});
+  const [fieldValues, setFieldValues] = useState(() => ({
+    ...getDefaultFieldValues("render_free"),
+    ...readSavedRenderConfig(),
+  }));
   const [deploying, setDeploying] = useState(false);
   const [deployResult, setDeployResult] = useState(null);
   const [error, setError] = useState("");
@@ -164,6 +243,51 @@ export default function DeployPage() {
   useEffect(() => {
     if (modelId) localStorage.setItem(LAST_MODEL_KEY, modelId);
   }, [modelId]);
+
+  useEffect(() => {
+    if (target !== "render_free") return;
+    const merged = {
+      ...getDefaultFieldValues("render_free"),
+      ...readSavedRenderConfig(),
+    };
+    setFieldValues((previous) => ({ ...merged, ...previous }));
+  }, [target]);
+
+  useEffect(() => {
+    if (target !== "render_free") return;
+    const repoUrl = (fieldValues.repo_url || "").trim();
+    if (!repoUrl) return;
+    const derived = getDerivedRenderNames(repoUrl);
+    setFieldValues((previous) => {
+      const next = { ...previous };
+      if (!previous.frontend_service_name) {
+        next.frontend_service_name = derived.frontend_service_name;
+      }
+      if (!previous.backend_service_name) {
+        next.backend_service_name = derived.backend_service_name;
+      }
+      return next;
+    });
+  }, [target, fieldValues.repo_url]);
+
+  useEffect(() => {
+    if (target !== "render_free") return;
+    const toSave = {
+      repo_url: fieldValues.repo_url || "",
+      branch: fieldValues.branch || "",
+      frontend_service_name: fieldValues.frontend_service_name || "",
+      backend_service_name: fieldValues.backend_service_name || "",
+      frontend_service_type: fieldValues.frontend_service_type || "static",
+      frontend_root_dir: fieldValues.frontend_root_dir || "frontend",
+      frontend_build_command: fieldValues.frontend_build_command || "npm ci && npm run build",
+      frontend_publish_path: fieldValues.frontend_publish_path || "build",
+      frontend_rewrite_rule: fieldValues.frontend_rewrite_rule || "/* -> /index.html",
+      backend_root_dir: fieldValues.backend_root_dir || "backend",
+      backend_start_command:
+        fieldValues.backend_start_command || "python -m uvicorn main:app --host 0.0.0.0 --port $PORT",
+    };
+    localStorage.setItem(LAST_RENDER_CONFIG_KEY, JSON.stringify(toSave));
+  }, [target, fieldValues]);
 
   const config = TARGET_CONFIGS[target];
   const endpointUrl = deployResult?.result?.endpoint_url || "";
@@ -192,13 +316,25 @@ export default function DeployPage() {
 
   const handleDeploy = async () => {
     if (!modelId) return;
+    if (target === "render_free") {
+      const repoUrl = (fieldValues.repo_url || "").trim();
+      const frontendType = (fieldValues.frontend_service_type || "static").trim().toLowerCase();
+      if (!repoUrl) {
+        setError("Public Git repo URL is required for Render full-stack deployment.");
+        return;
+      }
+      if (frontendType !== "static") {
+        setError("Select 'Static Site' for frontend service type to avoid Not Found pages.");
+        return;
+      }
+    }
 
     setDeploying(true);
     setError("");
     setDeployResult(null);
 
     try {
-      const response = await deployModel(modelId, target, fieldValues);
+      const response = await deployModel(modelId, target, { ...fieldValues });
       setDeployResult(response.data);
     } catch (deployError) {
       setError(deployError.response?.data?.detail || "Deployment failed.");
@@ -280,6 +416,11 @@ export default function DeployPage() {
                   type="button"
                   onClick={() => {
                     setTarget(option.id);
+                    const nextFields =
+                      option.id === "render_free"
+                        ? { ...getDefaultFieldValues("render_free"), ...readSavedRenderConfig() }
+                        : getDefaultFieldValues(option.id);
+                    setFieldValues(nextFields);
                     setDeployResult(null);
                     setError("");
                   }}
@@ -325,18 +466,54 @@ export default function DeployPage() {
               {config.fields.map((field) => (
                 <label key={field.key} className="text-sm text-[var(--muted)]">
                   {field.label}
-                  <input
-                    type="text"
-                    className="mt-2 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-solid)] px-4 py-3 text-[var(--ink)] outline-none focus:border-[var(--accent)]"
-                    placeholder={field.placeholder}
-                    value={fieldValues[field.key] || ""}
-                    onChange={(event) =>
-                      setFieldValues((previous) => ({ ...previous, [field.key]: event.target.value }))
-                    }
-                  />
+                  {field.type === "select" ? (
+                    <select
+                      className="mt-2 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-solid)] px-4 py-3 text-[var(--ink)] outline-none focus:border-[var(--accent)]"
+                      value={fieldValues[field.key] || ""}
+                      onChange={(event) =>
+                        setFieldValues((previous) => ({ ...previous, [field.key]: event.target.value }))
+                      }
+                    >
+                      {(field.options || []).map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      className="mt-2 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-solid)] px-4 py-3 text-[var(--ink)] outline-none focus:border-[var(--accent)]"
+                      placeholder={field.placeholder}
+                      value={fieldValues[field.key] || ""}
+                      onChange={(event) =>
+                        setFieldValues((previous) => ({ ...previous, [field.key]: event.target.value }))
+                      }
+                    />
+                  )}
                 </label>
               ))}
             </div>
+
+            {target === "render_free" ? (
+              <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface-alt)] px-4 py-4 text-sm text-[var(--ink)]">
+                <div className="font-semibold">Render setup this app expects</div>
+                <div className="mt-2 whitespace-pre-wrap font-mono text-xs leading-6 text-[var(--muted)]">
+{`Frontend:
+  type: ${fieldValues.frontend_service_type || "static"}
+  rootDir: ${fieldValues.frontend_root_dir || "frontend"}
+  buildCommand: ${fieldValues.frontend_build_command || "npm ci && npm run build"}
+  staticPublishPath: ${fieldValues.frontend_publish_path || "build"}
+  rewrite: ${fieldValues.frontend_rewrite_rule || "/* -> /index.html"}
+
+Backend:
+  type: web
+  runtime: python
+  rootDir: ${fieldValues.backend_root_dir || "backend"}
+  startCommand: ${fieldValues.backend_start_command || "python -m uvicorn main:app --host 0.0.0.0 --port $PORT"}`}
+                </div>
+              </div>
+            ) : null}
 
             {config.fields.length === 0 ? (
               <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface-alt)] px-4 py-3 text-sm text-[var(--muted)]">
@@ -396,6 +573,11 @@ export default function DeployPage() {
                   <a href={deployUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex rounded-full bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">
                     Open Render deploy flow
                   </a>
+                </div>
+              ) : null}
+              {target === "render_free" ? (
+                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800">
+                  If frontend opens with <span className="font-semibold">Not Found</span>, recheck: frontend service type must be <span className="font-semibold">Static Site</span>, publish directory <span className="font-semibold">build</span>, and rewrite <span className="font-semibold">{"/* -> /index.html"}</span>.
                 </div>
               ) : null}
               {endpointUrl && !backendUrl ? (
