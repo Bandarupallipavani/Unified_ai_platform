@@ -653,18 +653,18 @@ def build_render_blueprint(model_id: str, config: dict) -> dict:
     backend_url = f"https://{backend_name}.onrender.com"
     frontend_url = f"https://{frontend_name}.onrender.com"
 
-    repo_block = ""
+    repo_lines = ""
     if repo_url:
-        repo_block = textwrap.indent(
+        repo_lines = textwrap.indent(
             textwrap.dedent(
                 f"""
                 repo: {repo_url}
                 branch: {branch}
                 """
             ).strip(),
-            "    ",
+            "            ",
         )
-        repo_block = f"\n{repo_block}"
+        repo_lines = f"\n{repo_lines}"
 
     blueprint = textwrap.dedent(
         f"""
@@ -673,8 +673,8 @@ def build_render_blueprint(model_id: str, config: dict) -> dict:
             runtime: python
             name: {backend_name}
             plan: free
-            rootDir: backend{repo_block}
-            autoDeployTrigger: off
+            rootDir: backend{repo_lines}
+            autoDeploy: false
             buildCommand: pip install -r requirements.txt
             startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
             healthCheckPath: /health
@@ -698,8 +698,8 @@ def build_render_blueprint(model_id: str, config: dict) -> dict:
             runtime: static
             name: {frontend_name}
             plan: free
-            rootDir: frontend{repo_block}
-            autoDeployTrigger: off
+            rootDir: frontend{repo_lines}
+            autoDeploy: false
             buildCommand: npm ci && npm run build
             staticPublishPath: ./build
             envVars:

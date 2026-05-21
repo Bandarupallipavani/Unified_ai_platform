@@ -1,0 +1,45 @@
+services:
+  - type: web
+    runtime: python
+    name: unified-ai-api
+    plan: free
+    repo: https://github.com/Bandarupallipavani/Unified_ai_platform.git
+    branch: main
+    rootDir: backend
+    autoDeploy: false
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: SECRET_KEY
+        value: change-me-before-production
+      - key: DATABASE_URL
+        value: sqlite:///./automl.db
+      - key: ALLOWED_ORIGINS
+        value: https://unified-ai-web.onrender.com
+      - key: STORAGE_PATH
+        value: ./data_sessions
+      - key: REPORTS_PATH
+        value: ./reports
+      - key: OUTPUT_PATH
+        value: ./outputs
+      - key: MAX_CONCURRENT_JOBS
+        value: "1"
+
+  - type: web
+    runtime: static
+    name: unified-ai-web
+    plan: free
+    repo: https://github.com/Bandarupallipavani/Unified_ai_platform.git
+    branch: main
+    rootDir: frontend
+    autoDeploy: false
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./build
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://unified-ai-api.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
