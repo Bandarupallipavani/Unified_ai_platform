@@ -1,7 +1,7 @@
 services:
   - type: web
     runtime: python
-    name: unified-ai-platform-api
+    name: unified-ai-platform-api-pavani
     plan: free
     repo: https://github.com/Bandarupallipavani/Unified_ai_platform.git
     branch: main
@@ -16,7 +16,7 @@ services:
       - key: DATABASE_URL
         value: sqlite:///./automl.db
       - key: ALLOWED_ORIGINS
-        value: https://unified-ai-platform-web.onrender.com
+        value: https://unified-ai-platform-web-pavani.onrender.com
       - key: STORAGE_PATH
         value: ./data_sessions
       - key: REPORTS_PATH
@@ -28,7 +28,7 @@ services:
 
   - type: web
     runtime: static
-    name: unified-ai-platform-web
+    name: unified-ai-platform-web-pavani
     plan: free
     repo: https://github.com/Bandarupallipavani/Unified_ai_platform.git
     branch: main
@@ -38,7 +38,7 @@ services:
     staticPublishPath: build
     envVars:
       - key: REACT_APP_API_URL
-        value: https://unified-ai-platform-api.onrender.com
+        value: https://unified-ai-platform-api-pavani.onrender.com
     routes:
       - type: rewrite
         source: /*

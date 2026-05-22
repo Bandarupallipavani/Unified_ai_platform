@@ -51,12 +51,20 @@ function getRepoNameFromUrl(repoUrl) {
   return httpsMatch?.[1] || "";
 }
 
-function getDerivedRenderNames(repoUrl) {
+function shortModelSuffix(modelId) {
+  const normalized = (modelId || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+  return (normalized.slice(0, 6) || "demo");
+}
+
+function getDerivedRenderNames(repoUrl, modelId) {
   const repoName = getRepoNameFromUrl(repoUrl);
-  const base = slugify(repoName || "unified-ai", "unified-ai");
+  const base = slugify(repoName || "unified-ai", "unified-ai").slice(0, 40);
+  const suffix = shortModelSuffix(modelId);
   return {
-    frontend_service_name: `${base}-web`,
-    backend_service_name: `${base}-api`,
+    frontend_service_name: `${base}-web-${suffix}`,
+    backend_service_name: `${base}-api-${suffix}`,
   };
 }
 
@@ -291,7 +299,7 @@ export default function DeployPage() {
     if (target !== "render_free") return;
     const repoUrl = (fieldValues.repo_url || "").trim();
     if (!repoUrl) return;
-    const derived = getDerivedRenderNames(repoUrl);
+    const derived = getDerivedRenderNames(repoUrl, modelId);
     setFieldValues((previous) => {
       const next = { ...previous };
       if (!previous.frontend_service_name) {
@@ -302,7 +310,7 @@ export default function DeployPage() {
       }
       return next;
     });
-  }, [target, fieldValues.repo_url]);
+  }, [target, fieldValues.repo_url, modelId]);
 
   useEffect(() => {
     if (target !== "render_free") return;
@@ -329,7 +337,9 @@ export default function DeployPage() {
   const backendUrl = deployResult?.result?.backend_url || endpointUrl;
   const deployUrl = deployResult?.result?.deploy_url || "";
   const serviceName = deployResult?.result?.service_name || "";
-  const workflowState = frontendUrl || backendUrl ? "Created" : deploying ? "Running" : deployResult ? "Created" : "Ready";
+  const workflowState = target === "render_free"
+    ? (deploying ? "Generating" : deployResult ? "Generated" : "Ready")
+    : (frontendUrl || backendUrl ? "Created" : deploying ? "Running" : deployResult ? "Created" : "Ready");
   const renderConfigIssues = target === "render_free" ? getRenderConfigIssues(fieldValues) : [];
   const showRenderConfigWarning = target === "render_free" && Boolean(deployResult) && renderConfigIssues.length > 0;
   const downloadActions =
@@ -582,12 +592,16 @@ Backend:
 
           {deployResult ? (
             <Card className="border-emerald-200 bg-emerald-50 px-5 py-5">
-              <div className="text-base font-semibold text-emerald-900">Deployment result</div>
+              <div className="text-base font-semibold text-emerald-900">
+                {target === "render_free" ? "Blueprint generated" : "Deployment result"}
+              </div>
               {frontendUrl || backendUrl ? (
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   {frontendUrl ? (
                     <div className="rounded-xl border border-emerald-200 bg-white px-4 py-4">
-                      <div className="text-sm text-emerald-700">Frontend public URL</div>
+                      <div className="text-sm text-emerald-700">
+                        {target === "render_free" ? "Planned frontend URL" : "Frontend public URL"}
+                      </div>
                       <a href={frontendUrl} target="_blank" rel="noreferrer" className="mt-2 block break-all font-mono text-sm text-emerald-900 underline">
                         {frontendUrl}
                       </a>
@@ -595,12 +609,19 @@ Backend:
                   ) : null}
                   {backendUrl ? (
                     <div className="rounded-xl border border-emerald-200 bg-white px-4 py-4">
-                      <div className="text-sm text-emerald-700">Backend public URL</div>
+                      <div className="text-sm text-emerald-700">
+                        {target === "render_free" ? "Planned backend URL" : "Backend public URL"}
+                      </div>
                       <a href={backendUrl} target="_blank" rel="noreferrer" className="mt-2 block break-all font-mono text-sm text-emerald-900 underline">
                         {backendUrl}
                       </a>
                     </div>
                   ) : null}
+                </div>
+              ) : null}
+              {target === "render_free" ? (
+                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800">
+                  These URLs are generated from your requested service names. They return <span className="font-semibold">Not Found</span> until Render finishes deployment, and Render can add a suffix if a name is already taken.
                 </div>
               ) : null}
               {deployUrl ? (
@@ -652,7 +673,7 @@ Backend:
 
           <Card className="p-5">
             <div className="text-base font-semibold text-[var(--ink)]">
-              {target === "render_free" ? "Public link preview" : "Request preview"}
+              {target === "render_free" ? "Planned link preview" : "Request preview"}
             </div>
             <div className="mt-4 rounded-xl bg-[var(--surface-dark)] p-4 text-xs leading-7 text-emerald-300">
               <pre className="whitespace-pre-wrap font-mono">{target === "render_free"

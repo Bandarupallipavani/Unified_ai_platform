@@ -11,6 +11,7 @@ import textwrap
 import logging
 from typing import List, Optional, Tuple
 from pathlib import Path
+from urllib.parse import quote
 
 import numpy as np
 import pandas as pd
@@ -716,7 +717,14 @@ def build_render_blueprint(model_id: str, config: dict) -> dict:
     with open(path, "w", encoding="utf-8") as f:
         f.write(blueprint)
 
-    deploy_url = f"https://render.com/deploy?repo={repo_url}" if repo_url else "https://render.com/deploy"
+    if repo_url:
+        deploy_url = (
+            "https://render.com/deploy"
+            f"?repo={quote(repo_url, safe='')}"
+            f"&branch={quote(branch, safe='')}"
+        )
+    else:
+        deploy_url = "https://render.com/deploy"
 
     return {
         "target": "render_free",
@@ -729,6 +737,7 @@ def build_render_blueprint(model_id: str, config: dict) -> dict:
         "instructions": [
             "Commit render.yaml to the root of the same Git repo if you want one-click Deploy to Render.",
             "Open the Deploy to Render link, review both services, and approve the free deployment.",
+            "Use the final service URLs from the Render dashboard after deploy; Render may append a suffix if a name is already taken.",
             "After Render finishes, use the frontend onrender.com URL as the public app link.",
             "If you want current local-trained artifacts online, commit them or retrain inside the deployed app.",
         ],
