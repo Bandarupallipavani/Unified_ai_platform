@@ -227,6 +227,40 @@ function getFilenameFromHeaders(headers, fallback) {
   return match?.[1] || fallback;
 }
 
+function normalizeRenderPath(value) {
+  return (value || "")
+    .trim()
+    .replace(/^[./]+/, "")
+    .replace(/\/+$/, "")
+    .toLowerCase();
+}
+
+function normalizeRewriteRule(value) {
+  return (value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
+}
+
+function getRenderConfigIssues(values) {
+  const issues = [];
+  const frontendType = (values.frontend_service_type || "static").trim().toLowerCase();
+  const publishPath = normalizeRenderPath(values.frontend_publish_path || "build");
+  const rewriteRule = normalizeRewriteRule(values.frontend_rewrite_rule || "/* -> /index.html");
+
+  if (frontendType !== "static") {
+    issues.push("Frontend service type should be Static Site.");
+  }
+  if (publishPath !== "build") {
+    issues.push("Frontend publish directory should be build.");
+  }
+  if (rewriteRule !== "/*->/index.html") {
+    issues.push("Frontend rewrite should be /* -> /index.html.");
+  }
+
+  return issues;
+}
+
 export default function DeployPage() {
   const { modelId } = useParams();
   const navigate = useNavigate();
@@ -296,6 +330,8 @@ export default function DeployPage() {
   const deployUrl = deployResult?.result?.deploy_url || "";
   const serviceName = deployResult?.result?.service_name || "";
   const workflowState = frontendUrl || backendUrl ? "Created" : deploying ? "Running" : deployResult ? "Created" : "Ready";
+  const renderConfigIssues = target === "render_free" ? getRenderConfigIssues(fieldValues) : [];
+  const showRenderConfigWarning = target === "render_free" && Boolean(deployResult) && renderConfigIssues.length > 0;
   const downloadActions =
     target === "render_free"
       ? [{ key: "render", label: "Download render.yaml" }]
@@ -575,9 +611,16 @@ Backend:
                   </a>
                 </div>
               ) : null}
-              {target === "render_free" ? (
+              {showRenderConfigWarning ? (
                 <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800">
-                  If frontend opens with <span className="font-semibold">Not Found</span>, recheck: frontend service type must be <span className="font-semibold">Static Site</span>, publish directory <span className="font-semibold">build</span>, and rewrite <span className="font-semibold">{"/* -> /index.html"}</span>.
+                  <div>
+                    Potential <span className="font-semibold">Not Found</span> risk detected in Render frontend settings:
+                  </div>
+                  <ul className="mt-2 list-disc pl-5">
+                    {renderConfigIssues.map((issue) => (
+                      <li key={issue}>{issue}</li>
+                    ))}
+                  </ul>
                 </div>
               ) : null}
               {endpointUrl && !backendUrl ? (
