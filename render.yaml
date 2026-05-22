@@ -35,7 +35,7 @@ services:
     rootDir: frontend
     autoDeploy: false
     buildCommand: npm ci && npm run build
-    staticPublishPath: ./build
+    staticPublishPath: build
     envVars:
       - key: REACT_APP_API_URL
         value: https://unified-ai-platform-api.onrender.com
